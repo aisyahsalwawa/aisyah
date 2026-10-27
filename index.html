@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Maine Coon Cat: Action & Vocab Adventure 3D</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body {
+            font-family: 'Nunito', sans-serif;
+            overflow: hidden;
+            background-color: #1a1c23;
+            margin: 0;
+            padding: 0;
+        }
+        .font-heading {
+            font-family: 'Fredoka', cursive;
+        }
+        /* Custom Glassmorphism UI */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3), inset 0 2px 4px rgba(255,255,255,0.8);
+        }
+        .btn-3d {
+            transition: all 0.15s ease;
+            box-shadow: 0 6px 0 rgba(0,0,0,0.25);
+        }
+        .btn-3d:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 rgba(0,0,0,0.25);
+        }
+        /* Touch Controls styling */
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            active-bg: rgba(255, 255, 255, 0.5);
+        }
+        /* Trophy Float Animation */
+        @keyframes trophyFloat {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-12px) rotate(3deg); }
+        }
+        .animate-trophy {
+            animation: trophyFloat 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative select-none">
+
+    <!-- WebGL Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0"></div>
+
+    <!-- MAIN HUD OVERLAY -->
+    <div id="hud-layer" class="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-4 md:p-6">
+        <!-- Top Bar Header -->
+        <div class="flex justify-between items-start gap-2">
+            <!-- Left Stats: Treats & Zone Info -->
+            <div class="flex flex-col gap-2">
+                <!-- Treat Counter -->
+                <div class="glass-card rounded-2xl px-4 py-2 flex items-center gap-3 border-amber-300">
+                    <div class="w-10 h-10 rounded-full bg-amber-400 flex items-center justify-center text-white text-xl shadow-inner">
+                        <i class="fa-solid fa-bone text-amber-900"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs uppercase font-bold text-gray-500 tracking-wider">Treats Collected</div>
+                        <div id="treat-score" class="text-2xl font-black text-amber-600 font-heading leading-none">0</div>
+                    </div>
+                </div>
+
+                <!-- Current Food Zone Badge -->
+                <div id="zone-badge" class="glass-card rounded-xl px-3 py-1.5 flex items-center gap-2 border-cyan-400">
+                    <span id="zone-icon" class="text-xl">🐟</span>
+                    <span id="zone-name" class="font-bold text-sm text-cyan-900 font-heading">Zone 1: Fish Waters</span>
+                </div>
+            </div>
+
+            <!-- Right Controls: Audio Toggle & Pause/Restart -->
+            <div class="flex gap-2 pointer-events-auto">
+                <button id="btn-audio" onclick="toggleAudio()" class="w-12 h-12 glass-card rounded-2xl flex items-center justify-center text-gray-700 hover:text-amber-500 text-lg btn-3d">
+                    <i id="audio-icon" class="fa-solid fa-volume-high"></i>
+                </button>
+                <button id="btn-restart" onclick="restartGame()" class="w-12 h-12 glass-card rounded-2xl flex items-center justify-center text-gray-700 hover:text-amber-500 text-lg btn-3d">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Top Progress Bar -->
+        <div class="w-full max-w-md mx-auto pointer-events-auto">
+            <div class="glass-card p-2 rounded-2xl flex flex-col gap-1">
+                <div class="flex justify-between text-xs font-bold text-gray-600 px-1">
+                    <span>START</span>
+                    <span id="progress-text" class="text-amber-600 font-extrabold">Zone 1 of 4</span>
+                    <span>FINISH 🏆</span>
+                </div>
+                <div class="w-full bg-gray-200 h-4 rounded-full overflow-hidden p-0.5 border border-gray-300">
+                    <div id="progress-bar" class="bg-gradient-to-r from-amber-400 via-orange-500 to-emerald-500 h-full rounded-full transition-all duration-300" style="width: 5%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Touch Controls (Mobile Friendly) -->
+        <div class="flex justify-between items-end w-full pointer-events-auto md:hidden pb-2">
+            <!-- Left / Right Lane Switches -->
+            <div class="flex gap-3">
+                <button ontouchstart="moveLane(-1)" onclick="moveLane(-1)" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl active:bg-white/40">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <button ontouchstart="moveLane(1)" onclick="moveLane(1)" class="touch-btn w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl active:bg-white/40">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+            <!-- Jump Button -->
+            <button ontouchstart="triggerJump()" onclick="triggerJump()" class="touch-btn w-20 h-20 bg-amber-500/80 border-amber-300 rounded-full flex items-center justify-center text-white text-3xl shadow-lg active:scale-95">
+                <i class="fa-solid fa-paw"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- START / LANDING OVERLAY -->
+    <div id="start-modal" class="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+        <div class="glass-card max-w-md w-full rounded-3xl p-6 md:p-8 text-center flex flex-col items-center gap-5 border-amber-400">
+            <div class="w-24 h-24 bg-amber-100 rounded-full flex items-center justify-center border-4 border-amber-400 shadow-xl">
+                <span class="text-6xl">🐱</span>
+            </div>
+            <div>
+                <h1 class="text-3xl md:text-4xl font-black text-gray-800 font-heading leading-tight">Maine Coon's Food Adventure!</h1>
+                <p class="text-sm text-gray-600 mt-2 font-semibold">Help our fluffy black Maine Coon race through 4 food zones, solve Year 5 vocabulary questions, and collect cat treats to win the Gold Trophy!</p>
+            </div>
+            <div class="w-full bg-amber-50/80 rounded-2xl p-4 text-left border border-amber-200 text-xs text-gray-700 flex flex-col gap-2">
+                <div class="font-bold text-amber-800 text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-gamepad"></i> How to Play:
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div><b>Desktop:</b> Arrow Keys / A, D (Steer), Space / Up (Jump)</div>
+                    <div><b>Mobile:</b> On-screen Left, Right & Jump Buttons</div>
+                </div>
+            </div>
+            <button onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xl rounded-2xl btn-3d tracking-wider font-heading uppercase shadow-orange-500/30 shadow-lg">
+                Start Adventure <i class="fa-solid fa-play ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- INTERACTIVE VOCABULARY QUESTION MODAL -->
+    <div id="question-modal" class="hidden absolute inset-0 z-40 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+        <div class="glass-card max-w-lg w-full rounded-3xl p-6 md:p-8 flex flex-col gap-5 border-amber-400 relative overflow-hidden">
+            <!-- Zone Tag -->
+            <div class="flex justify-between items-center border-b border-gray-200 pb-3">
+                <span id="modal-zone-tag" class="px-3 py-1 bg-amber-100 text-amber-800 font-extrabold text-xs rounded-full font-heading uppercase tracking-wide">
+                    🐟 Zone 1: Fish Vocabulary
+                </span>
+                <span class="text-xs text-gray-500 font-bold">Year 5 Challenge</span>
+            </div>
+
+            <!-- Question Box -->
+            <div>
+                <h2 id="modal-question" class="text-lg md:text-xl font-black text-gray-800 leading-snug">
+                    Which action word describes how fish swim rapidly through water?
+                </h2>
+                <p id="modal-hint" class="text-xs text-amber-600 font-semibold mt-1">Hint: Choose the most accurate English action word.</p>
+            </div>
+
+            <!-- Options Grid -->
+            <div id="options-container" class="grid grid-cols-1 gap-3">
+                <!-- Buttons injected via JS -->
+            </div>
+
+            <!-- Feedback Message Box -->
+            <div id="feedback-box" class="hidden rounded-2xl p-3 text-center font-bold text-sm"></div>
+
+            <!-- Next / Continue Button -->
+            <button id="modal-continue-btn" onclick="continueAfterAnswer()" class="hidden w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-lg rounded-2xl btn-3d font-heading">
+                Sprint Forward! <i class="fa-solid fa-bolt ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- VICTORY / TROPHY ACHIEVEMENT MODAL -->
+    <div id="victory-modal" class="hidden absolute inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-lg p-4">
+        <div class="glass-card max-w-lg w-full rounded-3xl p-6 md:p-8 text-center flex flex-col items-center gap-5 border-yellow-400 relative overflow-hidden">
+            <!-- Shiny Background Effects -->
+            <div class="absolute -top-12 -left-12 w-32 h-32 bg-yellow-300/30 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-12 -right-12 w-32 h-32 bg-amber-400/30 rounded-full blur-2xl"></div>
+
+            <!-- Floating Grand Trophy -->
+            <div class="relative animate-trophy my-2">
+                <div class="w-28 h-28 bg-gradient-to-tr from-yellow-400 via-amber-300 to-yellow-500 rounded-full flex items-center justify-center border-4 border-yellow-200 shadow-2xl">
+                    <i class="fa-solid fa-trophy text-amber-800 text-6xl drop-shadow-md"></i>
+                </div>
+                <div class="absolute -bottom-2 -right-2 bg-emerald-500 text-white rounded-full p-2 border-2 border-white shadow">
+                    <i class="fa-solid fa-check text-lg"></i>
+                </div>
+            </div>
+
+            <div>
+                <span class="text-xs font-black uppercase text-amber-600 tracking-widest font-heading">Achievement Unlocked!</span>
+                <h2 class="text-3xl md:text-4xl font-black text-gray-800 font-heading">Master Cat Chef!</h2>
+                <p class="text-sm text-gray-600 font-semibold mt-1">You conquered all 4 food zones and showed exceptional Year 5 vocabulary skills!</p>
+            </div>
+
+            <!-- Stats Summary Card -->
+            <div class="w-full bg-amber-50/80 rounded-2xl p-4 border border-amber-200 grid grid-cols-2 gap-4">
+                <div class="flex flex-col items-center border-r border-amber-200 pr-2">
+                    <span class="text-xs text-gray-500 font-bold">Treats Collected</span>
+                    <span id="final-treats" class="text-2xl font-black text-amber-600 font-heading">0</span>
+                </div>
+                <div class="flex flex-col items-center pl-2">
+                    <span class="text-xs text-gray-500 font-bold">Accuracy Score</span>
+                    <span id="final-accuracy" class="text-2xl font-black text-emerald-600 font-heading">100%</span>
+                </div>
+            </div>
+
+            <!-- Badges Row -->
+            <div class="w-full flex justify-center gap-3">
+                <div class="bg-blue-100 text-blue-800 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border border-blue-300">
+                    🐟 Fish Expert
+                </div>
+                <div class="bg-amber-100 text-amber-800 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border border-amber-300">
+                    🍗 Poultry Master
+                </div>
+                <div class="bg-red-100 text-red-800 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border border-red-300">
+                    🥩 Beef Connoisseur
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <button onclick="restartGame()" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-black text-xl rounded-2xl btn-3d tracking-wider font-heading uppercase shadow-emerald-500/30 shadow-lg">
+                Play Again <i class="fa-solid fa-arrow-rotate-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN GAME SCRIPT LOGIC -->
+    <script>
+        /* ==================== AUDIO SYNTHESIZER (Web Audio API) ==================== */
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+            playJump() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+            playCollect() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime); // C5
+                osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.08); // E5
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+            playCorrect() {
+                if (!this.enabled) return;
+                this.init();
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + i * 0.08);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + i * 0.08 + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + i * 0.08);
+                    osc.stop(this.ctx.currentTime + i * 0.08 + 0.25);
+                });
+            }
+            playWrong() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
+                osc.frequency.setValueAtTime(140, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+            playTrophyFanfare() {
+                if (!this.enabled) return;
+                this.init();
+                const melody = [
+                    { f: 523.25, d: 0.15 }, { f: 659.25, d: 0.15 }, { f: 783.99, d: 0.15 },
+                    { f: 1046.50, d: 0.4 }, { f: 880.00, d: 0.2 }, { f: 1046.50, d: 0.6 }
+                ];
+                let time = this.ctx.currentTime;
+                melody.forEach(note => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(note.f, time);
+                    gain.gain.setValueAtTime(0.3, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + note.d);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(time);
+                    osc.stop(time + note.d);
+                    time += note.d;
+                });
+            }
+        }
+
+        const sfx = new SoundFX();
+
+        function toggleAudio() {
+            sfx.enabled = !sfx.enabled;
+            document.getElementById('audio-icon').className = sfx.enabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark text-red-500';
+        }
+
+        /* ==================== VOCABULARY QUESTION BANK ==================== */
+        const QUESTION_BANK = [
+            {
+                zone: 1,
+                zoneTitle: '🐟 Zone 1: Fish & Ocean Vocab',
+                question: 'Which action word describes how fish slice smoothly through water?',
+                hint: 'Choose the most descriptive verb for fish movement.',
+                options: [
+                    { text: 'Glide / Swim', correct: true, exp: 'Correct! Fish glide and swim smoothly using their fins.' },
+                    { text: 'Gallop', correct: false, exp: 'Incorrect. Gallop is how horses run fast.' },
+                    { text: 'Fly', correct: false, exp: 'Incorrect. Birds fly in the air.' },
+                    { text: 'Waddle', correct: false, exp: 'Incorrect. Ducks and penguins waddle.' }
+                ]
+            },
+            {
+                zone: 2,
+                zoneTitle: '🍗 Zone 2: Chicken & Poultry Vocab',
+                question: 'What vocabulary word is used to describe a young chicken?',
+                hint: 'Select the correct noun for a baby poultry bird.',
+                options: [
+                    { text: 'Calf', correct: false, exp: 'Incorrect. A calf is a young cow.' },
+                    { text: 'Chick', correct: true, exp: 'Spot on! A baby chicken is called a chick.' },
+                    { text: 'Duckling', correct: false, exp: 'Incorrect. A duckling is a young duck.' },
+                    { text: 'Cub', correct: false, exp: 'Incorrect. A cub is a baby bear or lion.' }
+                ]
+            },
+            {
+                zone: 3,
+                zoneTitle: '🥩 Zone 3: Beef & Meats Vocab',
+                question: 'Which cooking verb means to cook beef over a high open flame or grill?',
+                hint: 'Think of outdoor summer barbecues.',
+                options: [
+                    { text: 'Freeze', correct: false, exp: 'Incorrect. Freezing cools food down!' },
+                    { text: 'Boil', correct: false, exp: 'Incorrect. Boiling cooks in hot water.' },
+                    { text: 'Sear / Sear-Grill', correct: true, exp: 'Awesome! Searing or grilling caramelizes the beef over high flame.' },
+                    { text: 'Melt', correct: false, exp: 'Incorrect. Melting turns solids like butter into liquids.' }
+                ]
+            },
+            {
+                zone: 4,
+                zoneTitle: '🦆 Zone 4: Birds & Waterfowl Vocab',
+                question: 'What action word describes the sound or movement of waterfowl like ducks and pigeons taking off?',
+                hint: 'Consider how birds spread their wings quickly.',
+                options: [
+                    { text: 'Flap / Flutter', correct: true, exp: 'Brilliant! Birds flap their wings rapidly to gain lift into the air.' },
+                    { text: 'Slither', correct: false, exp: 'Incorrect. Snakes slither on the ground.' },
+                    { text: 'Prowl', correct: false, exp: 'Incorrect. Cats prowl quietly while hunting.' },
+                    { text: 'Stomp', correct: false, exp: 'Incorrect. Elephants stomp heavily on land.' }
+                ]
+            }
+        ];
+
+        /* ==================== GAME WORLD & THREE.JS SETUP ==================== */
+        let scene, camera, renderer;
+        let catGroup, tailMesh, earLeft, earRight;
+        let runningSpeed = 0.35;
+        let isGameRunning = false;
+        let isModalOpen = false;
+        let treatCount = 0;
+        let totalQuestionsAnswered = 0;
+        let correctAnswersCount = 0;
+
+        // Lanes: -3 (Left), 0 (Center), 3 (Right)
+        const LANES = [-3.2, 0, 3.2];
+        let currentLaneIndex = 1;
+        let targetX = LANES[1];
+        
+        // Cat Jump physics
+        let catY = 0;
+        let catVelocityY = 0;
+        let isJumping = false;
+        const GRAVITY = -0.018;
+        const JUMP_FORCE = 0.38;
+
+        // Track and Checkpoints configuration
+        const ZONE_LENGTH = 160;
+        const TOTAL_ZONES = 4;
+        const TRACK_TOTAL_LENGTH = ZONE_LENGTH * TOTAL_ZONES; // 640 units
+        let currentZone = 1;
+
+        // Arrays for dynamic world items
+        let treatsArray = [];
+        let checkpointGates = [];
+        let decorObjects = [];
+        let finishArch = null;
+
+        // Color palettes for zones
+        const ZONE_COLORS = {
+            1: { ground: 0x1e3a8a, path: 0x3b82f6, fog: 0x1d4ed8 }, // Fish Waters (Blue)
+            2: { ground: 0x78350f, path: 0xf59e0b, fog: 0xd97706 }, // Chicken Farm (Amber)
+            3: { ground: 0x7f1d1d, path: 0xef4444, fog: 0xb91c1c }, // Beef Ranch (Red)
+            4: { ground: 0x064e3b, path: 0x10b981, fog: 0x047857 }  // Bird Sanctuary (Emerald)
+        };
+
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1e293b);
+            scene.fog = new THREE.FogExp2(0x1e293b, 0.012);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 4.5, -9);
+            camera.lookAt(0, 1.5, 10);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(20, 40, -20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 1024;
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            // Build Game Objects
+            createMaineCoonCat();
+            buildTrackEnvironment();
+            populateTreatsAndGates();
+
+            // Resize listener
+            window.addEventListener('resize', onWindowResize);
+            
+            // Key Listeners
+            window.addEventListener('keydown', handleKeyDown);
+        }
+
+        /* ==================== LOW-POLY MAINE COON CAT MODEL ==================== */
+        function createMaineCoonCat() {
+            catGroup = new THREE.Group();
+
+            const blackFurMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.8 });
+            const innerEarMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, roughness: 0.5 });
+            const eyeMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2, emissive: 0xca8a04, emissiveIntensity: 0.3 });
+            const noseMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e });
+            const chestFluffMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.9 });
+
+            // Body (Slightly larger, majestic Maine Coon shape)
+            const bodyGeo = new THREE.BoxGeometry(1.2, 1.1, 2.2);
+            const bodyMesh = new THREE.Mesh(bodyGeo, blackFurMat);
+            bodyMesh.position.y = 1.1;
+            bodyMesh.castShadow = true;
+            catGroup.add(bodyMesh);
+
+            // Fluffy Chest Tuft
+            const chestGeo = new THREE.ConeGeometry(0.5, 0.8, 5);
+            const chestMesh = new THREE.Mesh(chestGeo, chestFluffMat);
+            chestMesh.rotation.x = Math.PI / 4;
+            chestMesh.position.set(0, 1.1, 1.0);
+            catGroup.add(chestMesh);
+
+            // Head
+            const headGeo = new THREE.BoxGeometry(1.0, 0.9, 0.9);
+            const headMesh = new THREE.Mesh(headGeo, blackFurMat);
+            headMesh.position.set(0, 1.8, 1.1);
+            headMesh.castShadow = true;
+            catGroup.add(headMesh);
+
+            // Distinctive Pointed Maine Coon Lynx Ears (Left & Right)
+            const earGeo = new THREE.ConeGeometry(0.25, 0.6, 4);
+            
+            earLeft = new THREE.Mesh(earGeo, blackFurMat);
+            earLeft.position.set(-0.35, 2.4, 1.1);
+            earLeft.rotation.z = -0.15;
+            catGroup.add(earLeft);
+
+            earRight = new THREE.Mesh(earGeo, blackFurMat);
+            earRight.position.set(0.35, 2.4, 1.1);
+            earRight.rotation.z = 0.15;
+            catGroup.add(earRight);
+
+            // Inner Ear Pink Details
+            const innerEarGeo = new THREE.ConeGeometry(0.15, 0.4, 4);
+            const innerLeft = new THREE.Mesh(innerEarGeo, innerEarMat);
+            innerLeft.position.set(-0.35, 2.38, 1.12);
+            innerLeft.rotation.z = -0.15;
+            catGroup.add(innerLeft);
+
+            const innerRight = new THREE.Mesh(innerEarGeo, innerEarMat);
+            innerRight.position.set(0.35, 2.38, 1.12);
+            innerRight.rotation.z = 0.15;
+            catGroup.add(innerRight);
+
+            // Glowing Yellow Eyes
+            const eyeGeo = new THREE.SphereGeometry(0.12, 8, 8);
+            const eyeL = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeL.position.set(-0.25, 1.9, 1.52);
+            const eyeR = new THREE.Mesh(eyeGeo, eyeMat);
+            eyeR.position.set(0.25, 1.9, 1.52);
+            catGroup.add(eyeL);
+            catGroup.add(eyeR);
+
+            // Cute Nose
+            const noseGeo = new THREE.ConeGeometry(0.08, 0.1, 4);
+            const nose = new THREE.Mesh(noseGeo, noseMat);
+            nose.rotation.x = Math.PI / 2;
+            nose.position.set(0, 1.72, 1.56);
+            catGroup.add(nose);
+
+            // Iconic Extremely Fluffy Maine Coon Tail
+            const tailGeo = new THREE.CylinderGeometry(0.1, 0.35, 1.8, 6);
+            tailMesh = new THREE.Mesh(tailGeo, blackFurMat);
+            tailMesh.position.set(0, 1.5, -1.2);
+            tailMesh.rotation.x = -Math.PI / 3;
+            catGroup.add(tailMesh);
+
+            // Paws/Legs (4)
+            const legGeo = new THREE.BoxGeometry(0.35, 0.7, 0.35);
+            const legPositions = [
+                [-0.4, 0.35, 0.7], [0.4, 0.35, 0.7],
+                [-0.4, 0.35, -0.7], [0.4, 0.35, -0.7]
+            ];
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, blackFurMat);
+                leg.position.set(...pos);
+                leg.castShadow = true;
+                catGroup.add(leg);
+            });
+
+            catGroup.position.set(LANES[currentLaneIndex], 0, 0);
+            scene.add(catGroup);
+        }
+
+        /* ==================== TRACK & ENVIRONMENT BUILDER ==================== */
+        function buildTrackEnvironment() {
+            // Long Main Pathway Segment
+            const pathGeo = new THREE.BoxGeometry(11, 0.2, TRACK_TOTAL_LENGTH + 50);
+            const pathMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.6 });
+            const pathMesh = new THREE.Mesh(pathGeo, pathMat);
+            pathMesh.position.set(0, -0.1, TRACK_TOTAL_LENGTH / 2);
+            pathMesh.receiveShadow = true;
+            scene.add(pathMesh);
+
+            // Ground Terrain Flanking Path
+            const groundGeo = new THREE.PlaneGeometry(200, TRACK_TOTAL_LENGTH + 100);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.9 });
+            const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.position.set(0, -0.2, TRACK_TOTAL_LENGTH / 2);
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            // Decorative Side Trees & Crystals along the length
+            for (let z = 20; z < TRACK_TOTAL_LENGTH; z += 18) {
+                const side = Math.random() > 0.5 ? 1 : -1;
+                const xPos = side * (8 + Math.random() * 6);
+                
+                // Low poly tree
+                const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 2);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.set(xPos, 1, z);
+
+                const leavesGeo = new THREE.ConeGeometry(2, 4, 5);
+                const leavesMat = new THREE.MeshStandardMaterial({ color: 0x10b981, flatShading: true });
+                const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                leaves.position.set(xPos, 3.5, z);
+
+                scene.add(trunk);
+                scene.add(leaves);
+            }
+
+            // Finish Line Arch at the end
+            buildFinishLineArch(TRACK_TOTAL_LENGTH - 20);
+        }
+
+        function buildFinishLineArch(zPos) {
+            const archGroup = new THREE.Group();
+
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.8, roughness: 0.2 });
+            const bannerMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+
+            // Pillars
+            const pillarGeo = new THREE.CylinderGeometry(0.6, 0.8, 8, 8);
+            const leftPillar = new THREE.Mesh(pillarGeo, goldMat);
+            leftPillar.position.set(-5.5, 4, zPos);
+            const rightPillar = new THREE.Mesh(pillarGeo, goldMat);
+            rightPillar.position.set(5.5, 4, zPos);
+
+            // Top Banner Beam
+            const beamGeo = new THREE.BoxGeometry(12, 1.2, 0.8);
+            const beam = new THREE.Mesh(beamGeo, bannerMat);
+            beam.position.set(0, 7.5, zPos);
+
+            // Trophy Model on Arch Center
+            const trophyGeo = new THREE.ConeGeometry(1, 1.8, 6);
+            const trophy = new THREE.Mesh(trophyGeo, goldMat);
+            trophy.rotation.x = Math.PI;
+            trophy.position.set(0, 9.2, zPos);
+
+            archGroup.add(leftPillar);
+            archGroup.add(rightPillar);
+            archGroup.add(beam);
+            archGroup.add(trophy);
+
+            scene.add(archGroup);
+            finishArch = archGroup;
+        }
+
+        /* ==================== TREATS & QUESTION CHECKPOINT GATES ==================== */
+        function populateTreatsAndGates() {
+            // Generate Treats (Bone / Fish shapes) along 3 lanes
+            for (let z = 15; z < TRACK_TOTAL_LENGTH - 30; z += 12) {
+                // Skip placement near question gates
+                if (z % ZONE_LENGTH > ZONE_LENGTH - 25) continue;
+
+                const laneIdx = Math.floor(Math.random() * 3);
+                const treatGeo = new THREE.TorusGeometry(0.35, 0.15, 8, 12);
+                const treatMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.5, roughness: 0.3 });
+                const treat = new THREE.Mesh(treatGeo, treatMat);
+                treat.position.set(LANES[laneIdx], 1.2, z);
+                treat.rotation.x = Math.PI / 2;
+
+                scene.add(treat);
+                treatsArray.push({ mesh: treat, active: true });
+            }
+
+            // Place 4 Interactive Vocabulary Checkpoint Gates
+            for (let i = 1; i <= TOTAL_ZONES; i++) {
+                const zGate = i * ZONE_LENGTH - 20;
+                
+                const gateGroup = new THREE.Group();
+                const gateFrameMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, emissive: 0x0284c7, emissiveIntensity: 0.5 });
+                
+                // Ring Gate
+                const ringGeo = new THREE.TorusGeometry(4.5, 0.3, 8, 24);
+                const ringMesh = new THREE.Mesh(ringGeo, gateFrameMat);
+                ringMesh.position.set(0, 4.5, zGate);
+                gateGroup.add(ringMesh);
+
+                scene.add(gateGroup);
+                checkpointGates.push({ z: zGate, zoneIndex: i, triggered: false });
+            }
+        }
+
+        /* ==================== CONTROLS & USER INTERACTION ==================== */
+        function moveLane(direction) {
+            if (!isGameRunning || isModalOpen) return;
+            currentLaneIndex = Math.max(0, Math.min(2, currentLaneIndex + direction));
+            targetX = LANES[currentLaneIndex];
+        }
+
+        function triggerJump() {
+            if (!isGameRunning || isModalOpen || isJumping) return;
+            isJumping = true;
+            catVelocityY = JUMP_FORCE;
+            sfx.playJump();
+        }
+
+        function handleKeyDown(e) {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                moveLane(-1);
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                moveLane(1);
+            } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') {
+                triggerJump();
+            }
+        }
+
+        /* ==================== VOCABULARY MODAL & GAMEPLAY FLOW ==================== */
+        function startGame() {
+            sfx.init();
+            document.getElementById('start-modal').classList.add('hidden');
+            isGameRunning = true;
+        }
+
+        function triggerQuestionModal(zoneNum) {
+            isGameRunning = false;
+            isModalOpen = true;
+
+            const qData = QUESTION_BANK[zoneNum - 1];
+            document.getElementById('modal-zone-tag').innerText = qData.zoneTitle;
+            document.getElementById('modal-question').innerText = qData.question;
+            document.getElementById('modal-hint').innerText = qData.hint;
+
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+            
+            document.getElementById('feedback-box').classList.add('hidden');
+            document.getElementById('modal-continue-btn').classList.add('hidden');
+
+            qData.options.forEach((opt) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-4 rounded-2xl border-2 border-gray-200 hover:border-amber-400 hover:bg-amber-50 font-bold text-gray-800 transition-all flex items-center justify-between text-base btn-3d bg-white";
+                btn.innerHTML = `<span>${opt.text}</span> <i class="fa-regular fa-circle text-gray-300"></i>`;
+                btn.onclick = () => selectAnswer(opt, btn);
+                optionsContainer.appendChild(btn);
+            });
+
+            document.getElementById('question-modal').classList.remove('hidden');
+        }
+
+        function selectAnswer(option, btnElement) {
+            const feedbackBox = document.getElementById('feedback-box');
+            totalQuestionsAnswered++;
+
+            // Disable all option buttons
+            const allBtns = document.getElementById('options-container').querySelectorAll('button');
+            allBtns.forEach(b => b.onclick = null);
+
+            if (option.correct) {
+                correctAnswersCount++;
+                sfx.playCorrect();
+                btnElement.className = "w-full text-left p-4 rounded-2xl border-2 border-emerald-500 bg-emerald-100 text-emerald-900 font-extrabold flex items-center justify-between text-base shadow-inner";
+                btnElement.querySelector('i').className = "fa-solid fa-circle-check text-emerald-600 text-xl";
+
+                feedbackBox.className = "rounded-2xl p-3 text-center font-bold text-sm bg-emerald-100 text-emerald-800 border border-emerald-300";
+                feedbackBox.innerHTML = `<i class="fa-solid fa-bolt text-amber-500 mr-1"></i> ${option.exp} +5 Bonus Treats!`;
+                
+                // Reward Bonus Treats
+                treatCount += 5;
+                document.getElementById('treat-score').innerText = treatCount;
+            } else {
+                sfx.playWrong();
+                btnElement.className = "w-full text-left p-4 rounded-2xl border-2 border-rose-500 bg-rose-100 text-rose-900 font-extrabold flex items-center justify-between text-base shadow-inner";
+                btnElement.querySelector('i').className = "fa-solid fa-circle-xmark text-rose-600 text-xl";
+
+                feedbackBox.className = "rounded-2xl p-3 text-center font-bold text-sm bg-rose-100 text-rose-800 border border-rose-300";
+                feedbackBox.innerText = option.exp;
+            }
+
+            feedbackBox.classList.remove('hidden');
+            document.getElementById('modal-continue-btn').classList.remove('hidden');
+        }
+
+        function continueAfterAnswer() {
+            document.getElementById('question-modal').classList.add('hidden');
+            isModalOpen = false;
+            isGameRunning = true;
+            
+            // Temporary Boost speed after answering
+            catGroup.position.z += 8;
+        }
+
+        function triggerVictorySequence() {
+            isGameRunning = false;
+            sfx.playTrophyFanfare();
+
+            document.getElementById('final-treats').innerText = treatCount;
+            const accuracy = totalQuestionsAnswered > 0 ? Math.round((correctAnswersCount / totalQuestionsAnswered) * 100) : 100;
+            document.getElementById('final-accuracy').innerText = `${accuracy}%`;
+
+            document.getElementById('victory-modal').classList.remove('hidden');
+        }
+
+        function restartGame() {
+            // Reset gameplay variables
+            catGroup.position.set(LANES[1], 0, 0);
+            currentLaneIndex = 1;
+            targetX = LANES[1];
+            catY = 0;
+            catVelocityY = 0;
+            isJumping = false;
+            treatCount = 0;
+            totalQuestionsAnswered = 0;
+            correctAnswersCount = 0;
+            currentZone = 1;
+
+            document.getElementById('treat-score').innerText = '0';
+            document.getElementById('progress-bar').style.width = '5%';
+            document.getElementById('progress-text').innerText = 'Zone 1 of 4';
+
+            // Reset Treat Visibility
+            treatsArray.forEach(t => {
+                t.active = true;
+                t.mesh.visible = true;
+            });
+
+            // Reset Checkpoints
+            checkpointGates.forEach(g => g.triggered = false);
+
+            document.getElementById('victory-modal').classList.add('hidden');
+            document.getElementById('question-modal').classList.add('hidden');
+            document.getElementById('start-modal').classList.remove('hidden');
+        }
+
+        /* ==================== MAIN ANIMATION LOOP & PHYSICS ==================== */
+        let animationClock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = animationClock.getDelta();
+            const time = animationClock.getElapsedTime();
+
+            if (isGameRunning) {
+                // Forward Cat Movement
+                catGroup.position.z += runningSpeed * 60 * delta;
+
+                // Smooth Lane Transition (X axis)
+                catGroup.position.x += (targetX - catGroup.position.x) * 0.18;
+
+                // Jump Physics (Y axis)
+                if (isJumping) {
+                    catY += catVelocityY;
+                    catVelocityY += GRAVITY;
+
+                    if (catY <= 0) {
+                        catY = 0;
+                        isJumping = false;
+                        catVelocityY = 0;
+                    }
+                }
+                catGroup.position.y = catY;
+
+                // Cute Low-Poly Running Animation
+                tailMesh.rotation.z = Math.sin(time * 12) * 0.25;
+                earLeft.rotation.z = -0.15 + Math.sin(time * 10) * 0.05;
+                earRight.rotation.z = 0.15 - Math.sin(time * 10) * 0.05;
+
+                // Camera Follow Behind Cat
+                camera.position.z = catGroup.position.z - 9;
+                camera.position.x = catGroup.position.x * 0.3;
+                camera.lookAt(catGroup.position.x * 0.5, catGroup.position.y + 1.5, catGroup.position.z + 10);
+
+                // Update Progress UI
+                const progressPercent = Math.min(100, (catGroup.position.z / TRACK_TOTAL_LENGTH) * 100);
+                document.getElementById('progress-bar').style.width = `${Math.max(5, progressPercent)}%`;
+
+                // Update Zone Badge based on distance
+                const detectedZone = Math.min(4, Math.floor(catGroup.position.z / ZONE_LENGTH) + 1);
+                if (detectedZone !== currentZone) {
+                    currentZone = detectedZone;
+                    updateZoneUI(currentZone);
+                }
+
+                // Check Treat Collisions
+                treatsArray.forEach(t => {
+                    if (t.active) {
+                        t.mesh.rotation.z += 0.05;
+                        const distSq = catGroup.position.distanceToSquared(t.mesh.position);
+                        if (distSq < 2.5) {
+                            t.active = false;
+                            t.mesh.visible = false;
+                            treatCount++;
+                            document.getElementById('treat-score').innerText = treatCount;
+                            sfx.playCollect();
+                        }
+                    }
+                });
+
+                // Check Vocabulary Checkpoint Gates Collision
+                checkpointGates.forEach(gate => {
+                    if (!gate.triggered && catGroup.position.z >= gate.z) {
+                        gate.triggered = true;
+                        triggerQuestionModal(gate.zoneIndex);
+                    }
+                });
+
+                // Check Finish Line Reached
+                if (catGroup.position.z >= TRACK_TOTAL_LENGTH - 20) {
+                    triggerVictorySequence();
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function updateZoneUI(zone) {
+            const badge = document.getElementById('zone-badge');
+            const icon = document.getElementById('zone-icon');
+            const name = document.getElementById('zone-name');
+            const progressText = document.getElementById('progress-text');
+
+            progressText.innerText = `Zone ${zone} of 4`;
+
+            if (zone === 1) {
+                icon.innerText = '🐟';
+                name.innerText = 'Zone 1: Fish Waters';
+            } else if (zone === 2) {
+                icon.innerText = '🍗';
+                name.innerText = 'Zone 2: Chicken Farm';
+            } else if (zone === 3) {
+                icon.innerText = '🥩';
+                name.innerText = 'Zone 3: Beef Ranch';
+            } else if (zone === 4) {
+                icon.innerText = '🦆';
+                name.innerText = 'Zone 4: Bird Haven';
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Initialize on Load
+        window.onload = function() {
+            initThree();
+            animate();
+        };
+    </script>
+</body>
+</html>
